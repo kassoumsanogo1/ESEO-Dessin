@@ -1,0 +1,15 @@
+
+voici les informations de ma base sur phpmyadmin : 
+user : db_etu
+password : N3twork! 
+lien page phpmyadmin : http://13.69.208.103:5619/myadmin/ 
+
+voici les contraintes : 
+Il ne peut y avoir que 4 concours par année durant les 4 saisons (1 concours par saison). 
+Un évaluateur ne pourra pas évaluer plus de 8 dessins en tout dans un même concours, 
+Un dessin doit être évalué par deux évaluateurs qui constituent un Jury. 
+Tout président d’un concours ne pourra pas être évaluateur ou compétiteur de ce même concours.  
+Tout compétiteur ne peut pas déposer plus de trois dessins dans un même concours donné  
+Un concours pour être organisé doit mobiliser au moins 6 Clubs. 
+Tout club qui participe à un concours donné doit mobiliser au moins 6 compétiteurs et 3 évaluateurs. A vous de bien remplir la BD afin d’avoir plusieurs scénarios. 
+Un évaluateur d’un concours ne peut pas concourir dans celui-ci  
