@@ -69,13 +69,13 @@ CREATE TABLE Evaluateur (
 
 CREATE TABLE Concours (
     numConcours INT PRIMARY KEY,
-    numUtilisateur INT,
+    numPresident INT,
     theme VARCHAR(200),
     saison VARCHAR(50),
     dateDebut DATE,
     dateFin DATE,
     etat ENUM('pas commencé', 'en cours', 'attente', 'résultat', 'évalué'),
-    FOREIGN KEY (numUtilisateur) REFERENCES Utilisateur(numUtilisateur)
+    FOREIGN KEY (numPresident) REFERENCES Utilisateur(numUtilisateur)
 );
 
 CREATE TABLE Competiteur (
