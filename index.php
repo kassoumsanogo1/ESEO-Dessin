@@ -338,6 +338,136 @@
                 transform: translateY(0);
             }
         }
+
+        /* Styles pour la section À propos */
+        .about {
+            padding: 6rem 2rem;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .about::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(0, 78, 146, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(0, 4, 40, 0.05) 0%, transparent 50%);
+        }
+
+        .about-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .about-text {
+            padding-right: 2rem;
+        }
+
+        .about h2 {
+            color: #004e92;
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+            position: relative;
+        }
+
+        .about h2::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 0;
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(45deg, #004e92, #000428);
+            border-radius: 2px;
+        }
+
+        .about p {
+            color: #555;
+            font-size: 1.1rem;
+            line-height: 1.8;
+            margin-bottom: 1.5rem;
+        }
+
+        .about-features {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .feature {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease;
+        }
+
+        .feature:hover {
+            transform: translateY(-5px);
+        }
+
+        .feature h3 {
+            color: #004e92;
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature p {
+            color: #666;
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        .about-image {
+            width: 100%;
+            height: 100%;
+            min-height: 400px;
+            background: url('images/art.png') center/contain no-repeat;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        @media (max-width: 768px) {
+            .about-container {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+
+            .about-text {
+                padding-right: 0;
+            }
+
+            .about h2::after {
+                left: 50%;
+                transform: translateX(-50%);
+            }
+
+            .about-features {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        html {
+            scroll-behavior: smooth;
+            /* Empêcher le scroll automatique */
+            overflow-anchor: none;
+        }
     </style>
 </head>
 <body>
@@ -348,11 +478,15 @@
         </div>
         <div class="nav-links">
             <a href="#home">Accueil</a>
-            <a href="#contests">Concours</a>
             <a href="#about">À propos</a>
+            <a href="#contests">Concours</a>
+            <a href="request.php">Requêtes SQL</a>
             <a href="login.php">Connexion</a>
         </div>
     </nav>
+
+    <!-- Ajout d'un div pour décaler le contenu sous la navbar fixe -->
+    <div style="height: 73px;"></div> <!-- Hauteur égale à celle de la navbar -->
 
     <section class="hero" id="home">
         <div class="hero-content">
@@ -375,6 +509,8 @@
         </div>
     </div>
 
+
+
     <section class="contests" id="contests">
         <h2>Concours en cours</h2>
         <div class="contest-grid">
@@ -382,6 +518,36 @@
         </div>
     </section>
 
+
+    <section class="about" id="about">
+        <div class="about-container">
+            <div class="about-text">
+                <h2>À propos d'ESEO'Dessin</h2>
+                <p>ESEO'Dessin est une plateforme innovante dédiée à la promotion de l'art et de la créativité au sein de la communauté ESEO. Notre mission est de créer un espace où les talents artistiques peuvent s'épanouir et se faire remarquer.</p>
+                <div class="about-features">
+                    <div class="feature">
+                        <h3>Concours Réguliers</h3>
+                        <p>Participez à nos concours thématiques mensuels et gagnez des prix exceptionnels.</p>
+                    </div>
+                    <div class="feature">
+                        <h3>Communauté Active</h3>
+                        <p>Rejoignez une communauté passionnée d'artistes et partagez vos expériences.</p>
+                    </div>
+                    <div class="feature">
+                        <h3>Visibilité</h3>
+                        <p>Exposez vos œuvres et gagnez en visibilité auprès des professionnels.</p>
+                    </div>
+                    <div class="feature">
+                        <h3>Support Technique</h3>
+                        <p>Bénéficiez d'un support technique et de ressources pour améliorer vos compétences.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="about-image"></div>
+        </div>
+    </section>
+
+    
     <script>
         // Données des concours
         const contests = [
@@ -427,16 +593,25 @@
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
                 e.preventDefault();
-                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                const target = document.querySelector(this.getAttribute('href'));
+                const navbarHeight = document.querySelector('.navbar').offsetHeight;
+                const targetPosition = target.getBoundingClientRect().top + window.pageYOffset - navbarHeight;
+                window.scrollTo({
+                    top: targetPosition,
                     behavior: 'smooth'
                 });
             });
         });
 
-        // Initialisation
+        // Modification de l'initialisation - suppression du scroll automatique
         document.addEventListener('DOMContentLoaded', () => {
             generateContestCards();
         });
+
+        // Désactiver explicitement la restauration du scroll
+        if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'manual';
+        }
 
         // Modal functionality
         const modal = document.getElementById('participateModal');
