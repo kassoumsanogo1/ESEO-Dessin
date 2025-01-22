@@ -164,6 +164,22 @@
             margin: 0 auto;
         }
 
+        .contest-grid1 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .contest-grid2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
         .contest-card {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
@@ -509,14 +525,29 @@
         </div>
     </div>
 
-
-
-    <section class="contests" id="contests">
-        <h2>Concours en cours</h2>
+    <section class="contests" id="contest">
+        <h2>Concours terminés</h2>
         <div class="contest-grid">
             <!-- Les cartes de concours seront générées dynamiquement par JavaScript -->
         </div>
     </section>
+
+
+    <section class="contests" id="contests">
+        <h2>Concours en cours</h2>
+        <div class="contest-grid1">
+            <!-- Les cartes de concours seront générées dynamiquement par JavaScript -->
+        </div>
+    </section>
+
+
+    <section class="contests" id="contest1">
+        <h2>Concours non commencés</h2>
+        <div class="contest-grid2">
+            <!-- Les cartes de concours seront générées dynamiquement par JavaScript -->
+        </div>
+    </section>
+
 
 
     <section class="about" id="about">
@@ -554,22 +585,54 @@
             {
                 title: "Nature et Vie Sauvage",
                 description: "Illustrez la beauté de la nature et de la faune",
-                deadline: "15 Juin 2024",
+                deadline: "20 Juin 2023",
                 image: "images/nature.png" 
             },
             {
                 title: "Art Urbain",
                 description: "Capturez l'essence de la vie urbaine moderne",
-                deadline: "20 Juin 2024",
+                deadline: "21 Septembre 2023",
                 image: "images/art.png"
             },
             {
                 title: "Portrait Créatif",
                 description: "Réinventez l'art du portrait",
-                deadline: "25 Juin 2024",
+                deadline: "21 Décembre 2023",
                 image: "images/portrait.png"
             }
         ];
+
+
+        const contest = [
+            {
+                title: "Nature et Vie Sauvage",
+                description: "Illustrez la beauté de la nature et de la faune",
+                deadline: "19 Mars 2024",
+                image: "images/nature.png" 
+            }
+        ];
+
+        const contest1 = [
+            {
+                title: "Nature et Vie Sauvage",
+                description: "Illustrez la beauté de la nature et de la faune",
+                deadline: "20 Juin 2024",
+                image: "images/nature.png" 
+            },
+            {
+                title: "Art Urbain",
+                description: "Capturez l'essence de la vie urbaine moderne",
+                deadline: "21 Septembre 2024",
+                image: "images/art.png"
+            },
+            {
+                title: "Portrait Créatif",
+                description: "Réinventez l'art du portrait",
+                deadline: "21 Décembre 2024",
+                image: "images/portrait.png"
+            }
+        ];
+
 
         // Générer les cartes de concours
         function generateContestCards() {
@@ -589,6 +652,49 @@
             });
         }
 
+        // Générer les cartes de concours
+        function generateContestCards1() {
+            const contestGrid = document.querySelector('.contest-grid1');
+            contest.forEach(contest => {
+                const card = `
+                    <div class="contest-card">
+                        <img src="${contest.image}" alt="${contest.title}" class="contest-image">
+                        <div class="contest-info">
+                            <h3>${contest.title}</h3>
+                            <p>${contest.description}</p>
+                            <p>Date limite: ${contest.deadline}</p>
+                        </div>
+                    </div>
+                `;
+                contestGrid.innerHTML += card;
+            });
+        }
+
+
+        // Générer les cartes de concours
+        function generateContestCards2() {
+            const contestGrid = document.querySelector('.contest-grid2');
+            contest1.forEach(contest => {
+                const card = `
+                    <div class="contest-card">
+                        <img src="${contest.image}" alt="${contest.title}" class="contest-image">
+                        <div class="contest-info">
+                            <h3>${contest.title}</h3>
+                            <p>${contest.description}</p>
+                            <p>Date limite: ${contest.deadline}</p>
+                        </div>
+                    </div>
+                `;
+                contestGrid.innerHTML += card;
+            });
+        }
+
+
+
+
+
+
+
         // Animation du scroll fluide
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
@@ -606,6 +712,9 @@
         // Modification de l'initialisation - suppression du scroll automatique
         document.addEventListener('DOMContentLoaded', () => {
             generateContestCards();
+            generateContestCards1();
+            generateContestCards2();
+
         });
 
         // Désactiver explicitement la restauration du scroll

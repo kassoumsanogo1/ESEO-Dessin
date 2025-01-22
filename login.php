@@ -58,7 +58,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             header("Location: " . getRoleRedirection($user['role']));
             exit();
         } else {
-            $error = "Identifiants incorrects";
+            $error = "Identifiant ou mot de passe incorrects";
         }
     } catch(PDOException $e) {
         error_log("Erreur PDO: " . $e->getMessage());
