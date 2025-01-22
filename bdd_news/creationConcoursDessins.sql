@@ -100,7 +100,7 @@ CREATE TABLE Dessin (
     commentaire TEXT,
     classement INT,
     dateRemise DATE,
-    leDessin BLOB,
+    leDessin VARCHAR(400),
     FOREIGN KEY (numConcours) REFERENCES Concours(numConcours),
     FOREIGN KEY (numCompetiteur) REFERENCES Competiteur(numCompetiteur)
 );
