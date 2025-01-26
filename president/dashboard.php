@@ -14,14 +14,22 @@ $stmt = $db->prepare("
 $stmt->execute([$_SESSION['user_id']]);
 $presidentInfo = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Récupération des concours organisés par le président
+// Récupération des concours organisés par le président avec statistiques détaillées
 $stmt = $db->prepare("
-    SELECT c.*, 
-           COUNT(DISTINCT pc.numClub) as nb_clubs_participants,
-           COUNT(DISTINCT pcomp.numCompetiteur) as nb_participants
+    SELECT 
+        c.*,
+        COUNT(DISTINCT pc.numClub) as nb_clubs_participants,
+        COUNT(DISTINCT pcomp.numCompetiteur) as nb_participants,
+        COUNT(DISTINCT d.numDessin) as nb_dessins,
+        COUNT(DISTINCT e.numEvaluateur) as nb_evaluateurs,
+        AVG(ev.note) as moyenne_notes
     FROM Concours c
     LEFT JOIN ParticipeClub pc ON c.numConcours = pc.numConcours
     LEFT JOIN ParticipeCompetiteur pcomp ON c.numConcours = pcomp.numConcours
+    LEFT JOIN Dessin d ON c.numConcours = d.numConcours
+    LEFT JOIN Jury j ON c.numConcours = j.numConcours
+    LEFT JOIN Evaluateur e ON j.numEvaluateur = e.numEvaluateur
+    LEFT JOIN Evaluation ev ON d.numDessin = ev.numDessin
     WHERE c.numPresident = ?
     GROUP BY c.numConcours
     ORDER BY c.dateDebut DESC
@@ -29,19 +37,53 @@ $stmt = $db->prepare("
 $stmt->execute([$_SESSION['user_id']]);
 $concours = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Récupération des statistiques du club
+// Statistiques du club incluant les résultats des concours
 $stmt = $db->prepare("
     SELECT 
         COUNT(DISTINCT comp.numCompetiteur) as total_competiteurs,
-        COUNT(DISTINCT e.numEvaluateur) as total_evaluateurs
+        COUNT(DISTINCT e.numEvaluateur) as total_evaluateurs,
+        COUNT(DISTINCT d.numDessin) as total_dessins,
+        (SELECT COUNT(*) 
+         FROM Dessin d2 
+         JOIN Competiteur comp2 ON d2.numCompetiteur = comp2.numCompetiteur
+         JOIN Utilisateur u2 ON comp2.numCompetiteur = u2.numUtilisateur
+         WHERE u2.numClub = c.numClub AND d2.classement <= 3) as nb_podiums,
+        (SELECT AVG(note)
+         FROM Evaluation ev
+         JOIN Dessin d3 ON ev.numDessin = d3.numDessin
+         JOIN Competiteur comp3 ON d3.numCompetiteur = comp3.numCompetiteur
+         JOIN Utilisateur u3 ON comp3.numCompetiteur = u3.numUtilisateur
+         WHERE u3.numClub = c.numClub) as moyenne_club
     FROM Club c
     LEFT JOIN Utilisateur u ON c.numClub = u.numClub
     LEFT JOIN Competiteur comp ON u.numUtilisateur = comp.numCompetiteur
     LEFT JOIN Evaluateur e ON u.numUtilisateur = e.numEvaluateur
+    LEFT JOIN Dessin d ON comp.numCompetiteur = d.numCompetiteur
     WHERE c.numClub = ?
+    GROUP BY c.numClub
 ");
 $stmt->execute([$presidentInfo['numClub']]);
 $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Récupération des meilleurs compétiteurs du club
+$stmt = $db->prepare("
+    SELECT 
+        u.nom,
+        u.prenom,
+        COUNT(d.numDessin) as nb_participations,
+        AVG(ev.note) as moyenne_notes,
+        COUNT(CASE WHEN d.classement <= 3 THEN 1 END) as nb_podiums
+    FROM Utilisateur u
+    JOIN Competiteur comp ON u.numUtilisateur = comp.numCompetiteur
+    LEFT JOIN Dessin d ON comp.numCompetiteur = d.numCompetiteur
+    LEFT JOIN Evaluation ev ON d.numDessin = ev.numDessin
+    WHERE u.numClub = ?
+    GROUP BY u.numUtilisateur
+    ORDER BY moyenne_notes DESC
+    LIMIT 5
+");
+$stmt->execute([$presidentInfo['numClub']]);
+$topCompetiteurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
@@ -292,6 +334,18 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
                     <div class="stat-value"><?= $stats['total_evaluateurs'] ?></div>
                     <div class="stat-label">Évaluateurs</div>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-value"><?= number_format($stats['moyenne_club'], 2) ?></div>
+                    <div class="stat-label">Moyenne du club</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value"><?= $stats['nb_podiums'] ?></div>
+                    <div class="stat-label">Podiums obtenus</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value"><?= $stats['total_dessins'] ?></div>
+                    <div class="stat-label">Dessins soumis</div>
+                </div>
             </div>
 
             <div class="action-buttons">
@@ -319,6 +373,32 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
                                 <td><?php echo $c['dateDebut']; ?></td>
                                 <td><?php echo $c['dateFin']; ?></td>
                                 <td><?php echo htmlspecialchars($c['etat']); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="top-competiteurs">
+                <h2>Meilleurs compétiteurs</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nom</th>
+                            <th>Prénom</th>
+                            <th>Participations</th>
+                            <th>Moyenne</th>
+                            <th>Podiums</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($topCompetiteurs as $comp): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($comp['nom']) ?></td>
+                                <td><?= htmlspecialchars($comp['prenom']) ?></td>
+                                <td><?= $comp['nb_participations'] ?></td>
+                                <td><?= number_format($comp['moyenne_notes'], 2) ?></td>
+                                <td><?= $comp['nb_podiums'] ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
