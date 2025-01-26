@@ -605,31 +605,31 @@
 
         const contest = [
             {
-                title: "Nature et Vie Sauvage",
-                description: "Illustrez la beauté de la nature et de la faune",
+                title: "Mon Compagnon pour la vie",
+                description: "Dessine moi s'il te plait",
                 deadline: "19 Mars 2024",
-                image: "images/nature.png" 
+                image: "images/manga.png" 
             }
         ];
 
         const contest1 = [
             {
-                title: "Nature et Vie Sauvage",
-                description: "Illustrez la beauté de la nature et de la faune",
+                title: "Explorons l'univers",
+                description: "WOWOWOWO montre moi ton talent",
                 deadline: "20 Juin 2024",
-                image: "images/nature.png" 
+                image: "images/dessine.png" 
             },
             {
-                title: "Art Urbain",
-                description: "Capturez l'essence de la vie urbaine moderne",
+                title: "Vivre Libre",
+                description: "Haha essaie de me reproduire si tu peux !",
                 deadline: "21 Septembre 2024",
-                image: "images/art.png"
+                image: "images/vie.png"
             },
             {
-                title: "Portrait Créatif",
-                description: "Réinventez l'art du portrait",
+                title: "Dessine Moi",
+                description: "Je vais réinventer la vie ici",
                 deadline: "21 Décembre 2024",
-                image: "images/portrait.png"
+                image: "images/draw.png"
             }
         ];
 

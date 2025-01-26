@@ -1,6 +1,30 @@
 <?php
 require_once 'includes/config.php';
 
+// Vérification de la session
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (!isset($_SESSION['user_id'])) {
+    header('Location: login.php');
+    exit;
+}
+
+// Vérification du rôle administrateur
+$stmt = $db->prepare("
+    SELECT COUNT(*) 
+    FROM Administrateur 
+    WHERE numAdministrateur = ?
+");
+$stmt->execute([$_SESSION['user_id']]);
+$isAdmin = $stmt->fetchColumn();
+
+if (!$isAdmin) {
+    header('Location: index.php');
+    exit;
+}
+
 $result = null;
 $error = null;
 
@@ -121,6 +145,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['query'])) {
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
 
+        .back-btn {
+            padding: 1rem 2rem;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            margin-right: 1rem;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            background: #5a6268;
+        }
+
         .result-container {
             margin-top: 2rem;
             overflow-x: auto;
@@ -165,15 +209,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['query'])) {
             <div class="logo">ESEO'Dessin</div>
         </div>
         <div class="nav-links">
-            <a href="index.php">Accueil</a>
-            <a href="index.php#contests">Concours</a>
-            <a href="index.php#about">À propos</a>
             <a href="request.php">Requêtes SQL</a>
-            <a href="login.php">Connexion</a>
+            <a href="logout.php" onclick="return confirm('Voulez-vous vraiment vous déconnecter ?')">Déconnexion</a>
         </div>
     </nav>
 
     <div class="query-container">
+        <a href="admin/dashboard.php" class="back-btn">Retour à la page Admin</a>
         <h2>Exécuter une requête SQL</h2>
         <p class="info">Base de données connectée: db_site</p>
         <form class="query-form" method="POST">

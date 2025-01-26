@@ -32,35 +32,80 @@ $stmt = $db->prepare("
 $stmt->execute();
 $stats = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Données pour le graphique des concours par mois
+// Statistiques des concours par mois
 $stmt = $db->prepare("
-    SELECT MONTH(dateDebut) as mois, COUNT(*) as nombre
-    FROM Concours 
+    SELECT 
+        DATE_FORMAT(dateDebut, '%Y-%m') as mois,
+        COUNT(*) as nombre_concours,
+        COUNT(DISTINCT d.numDessin) as nombre_dessins
+    FROM Concours c
+    LEFT JOIN Dessin d ON c.numConcours = d.numConcours
     WHERE YEAR(dateDebut) = YEAR(CURRENT_DATE)
-    GROUP BY MONTH(dateDebut)
+    GROUP BY DATE_FORMAT(dateDebut, '%Y-%m')
 ");
 $stmt->execute();
-$concours_par_mois = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$stats_par_mois = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Correction de la requête pour les derniers concours
 $stmt = $db->prepare("
     SELECT 
         c.*,
         u.nom as president_nom,
-        COUNT(DISTINCT pc.numClub) as nb_clubs,
-        COUNT(DISTINCT d.numDessin) as nb_dessins,
-        COUNT(DISTINCT e.numDessin) as nb_evaluations
+        u.prenom as president_prenom,
+        (SELECT COUNT(DISTINCT pc.numClub) 
+         FROM ParticipeClub pc 
+         WHERE pc.numConcours = c.numConcours) as nb_clubs,
+        (SELECT COUNT(DISTINCT d.numDessin) 
+         FROM Dessin d 
+         WHERE d.numConcours = c.numConcours) as nb_dessins,
+        (SELECT COUNT(DISTINCT e.numEvaluateur) 
+         FROM Jury e 
+         WHERE e.numConcours = c.numConcours) as nb_evaluateurs
     FROM Concours c
-    LEFT JOIN Utilisateur u ON c.numUtilisateur = u.numUtilisateur
-    LEFT JOIN ParticipeClub pc ON c.numConcours = pc.numConcours
-    LEFT JOIN Dessin d ON c.numConcours = d.numConcours
-    LEFT JOIN Evaluation e ON d.numDessin = e.numDessin
-    GROUP BY c.numConcours
+    LEFT JOIN President p ON c.numPresident = p.numPresident
+    LEFT JOIN Utilisateur u ON p.numPresident = u.numUtilisateur
     ORDER BY c.dateDebut DESC
     LIMIT 5
 ");
 $stmt->execute();
 $concours = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Statistiques des évaluations
+$stmt = $db->prepare("
+    SELECT 
+        e.numEvaluateur,
+        u.nom,
+        u.prenom,
+        COUNT(e.numDessin) as nb_evaluations,
+        AVG(e.note) as moyenne_notes
+    FROM Evaluation e
+    JOIN Evaluateur ev ON e.numEvaluateur = ev.numEvaluateur
+    JOIN Utilisateur u ON ev.numEvaluateur = u.numUtilisateur
+    GROUP BY e.numEvaluateur
+    ORDER BY nb_evaluations DESC
+    LIMIT 5
+");
+$stmt->execute();
+$top_evaluateurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Ajouter la section des meilleurs dessins
+$stmt = $db->prepare("
+    SELECT 
+        d.*,
+        u.nom as artiste_nom,
+        u.prenom as artiste_prenom,
+        AVG(e.note) as note_moyenne
+    FROM Dessin d
+    JOIN Competiteur c ON d.numCompetiteur = c.numCompetiteur
+    JOIN Utilisateur u ON c.numCompetiteur = u.numUtilisateur
+    LEFT JOIN Evaluation e ON d.numDessin = e.numDessin
+    GROUP BY d.numDessin
+    HAVING note_moyenne IS NOT NULL
+    ORDER BY note_moyenne DESC
+    LIMIT 5
+");
+$stmt->execute();
+$top_dessins = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -331,9 +376,8 @@ $concours = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
         <div class="nav-links">
             <a href="dashboard.php">Tableau de bord</a>
-            <a href="gestion_clubs.php">Clubs</a>
-            <a href="gestion_users.php">Utilisateurs</a>
-            <a href="gestion_concours.php">Concours</a>
+            <a href="club.php">Clubs</a>
+            <a href="../request.php">Requêtes SQL</a>
             <a href="../logout.php">Déconnexion</a>
         </div>
     </nav>
@@ -423,5 +467,59 @@ $concours = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </tbody>
         </table>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+    // Graphique des concours par mois
+    const concoursData = <?php echo json_encode($stats_par_mois); ?>;
+    new Chart(document.getElementById('concoursChart'), {
+        type: 'line',
+        data: {
+            labels: concoursData.map(item => item.mois),
+            datasets: [{
+                label: 'Nombre de concours',
+                data: concoursData.map(item => item.nombre_concours),
+                borderColor: '#004e92',
+                tension: 0.1
+            }, {
+                label: 'Nombre de dessins',
+                data: concoursData.map(item => item.nombre_dessins),
+                borderColor: '#000428',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Évolution des concours et dessins par mois'
+                }
+            }
+        }
+    });
+
+    // Graphique des évaluations
+    const evaluateursData = <?php echo json_encode($top_evaluateurs); ?>;
+    new Chart(document.getElementById('evaluateursChart'), {
+        type: 'bar',
+        data: {
+            labels: evaluateursData.map(item => item.nom + ' ' + item.prenom),
+            datasets: [{
+                label: 'Nombre d\'évaluations',
+                data: evaluateursData.map(item => item.nb_evaluations),
+                backgroundColor: '#004e92'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Top 5 des évaluateurs'
+                }
+            }
+        }
+    });
+    </script>
 </body>
 </html>
