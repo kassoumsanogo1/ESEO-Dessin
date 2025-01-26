@@ -14,7 +14,7 @@ $stmt = $db->prepare("
 $stmt->execute([$_SESSION['user_id']]);
 $presidentInfo = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Récupération des concours organisés par le club
+// Récupération des concours organisés par le président
 $stmt = $db->prepare("
     SELECT c.*, 
            COUNT(DISTINCT pc.numClub) as nb_clubs_participants,
@@ -22,7 +22,7 @@ $stmt = $db->prepare("
     FROM Concours c
     LEFT JOIN ParticipeClub pc ON c.numConcours = pc.numConcours
     LEFT JOIN ParticipeCompetiteur pcomp ON c.numConcours = pcomp.numConcours
-    WHERE c.numUtilisateur = ?
+    WHERE c.numPresident = ?
     GROUP BY c.numConcours
     ORDER BY c.dateDebut DESC
 ");
