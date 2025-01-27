@@ -65,7 +65,6 @@ $stmt = $db->prepare("
     LEFT JOIN President p ON c.numPresident = p.numPresident
     LEFT JOIN Utilisateur u ON p.numPresident = u.numUtilisateur
     ORDER BY c.dateDebut DESC
-    LIMIT 5
 ");
 $stmt->execute();
 $concours = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -366,6 +365,88 @@ $top_dessins = $stmt->fetchAll(PDO::FETCH_ASSOC);
             padding: 0.5rem 1rem;
             border-radius: 8px;
         }
+
+        /* Ajout de styles pour les badges d'état */
+        .status-badge {
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            display: inline-block;
+        }
+
+        .status-en-cours {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .status-évalué {
+            background-color: #2ecc71;
+            color: white;
+        }
+
+        .status-pas-commencé {
+            background-color: #95a5a6;
+            color: white;
+        }
+
+        .status-attente {
+            background-color: #f1c40f;
+            color: white;
+        }
+
+        .status-résultat {
+            background-color: #e67e22;
+            color: white;
+        }
+
+        /* Style pour la pagination si nécessaire */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 2rem;
+        }
+
+        .pagination a {
+            padding: 0.5rem 1rem;
+            background: #f0f2f5;
+            border-radius: 5px;
+            text-decoration: none;
+            color: #004e92;
+            transition: all 0.3s ease;
+        }
+
+        .pagination a:hover {
+            background: #004e92;
+            color: white;
+        }
+
+        /* Amélioration du style du tableau */
+        .admin-table {
+            margin-bottom: 2rem;
+        }
+
+        .admin-table th {
+            position: sticky;
+            top: 80px;
+            background: #004e92;
+            z-index: 10;
+        }
+
+        .admin-table tbody tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        .table-actions {
+            display: flex;
+            gap: 0.3rem;
+        }
+
+        .btn-small {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.8rem;
+        }
     </style>
 </head>
 <body>
@@ -433,16 +514,18 @@ $top_dessins = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
 
         <div class="section-header">
-            <h2>Derniers concours</h2>
+            <h2>Liste des concours</h2>
         </div>
         <table class="admin-table">
             <thead>
                 <tr>
-                    <th style="width: 25%">Thème</th>
-                    <th style="width: 20%">Président</th>
-                    <th style="width: 15%">Clubs participants</th>
-                    <th style="width: 15%">Dessins</th>
-                    <th style="width: 15%">État</th>
+                    <th style="width: 20%">Thème</th>
+                    <th style="width: 15%">Président</th>
+                    <th style="width: 12%">Date début</th>
+                    <th style="width: 12%">Date fin</th>
+                    <th style="width: 10%">Clubs</th>
+                    <th style="width: 10%">Dessins</th>
+                    <th style="width: 11%">État</th>
                     <th style="width: 10%">Actions</th>
                 </tr>
             </thead>
@@ -450,10 +533,16 @@ $top_dessins = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <?php foreach ($concours as $c): ?>
                 <tr>
                     <td><?php echo htmlspecialchars($c['theme']); ?></td>
-                    <td><?php echo htmlspecialchars($c['president_nom']); ?></td>
+                    <td><?php echo htmlspecialchars($c['president_nom'] . ' ' . $c['president_prenom']); ?></td>
+                    <td><?php echo date('d/m/Y', strtotime($c['dateDebut'])); ?></td>
+                    <td><?php echo date('d/m/Y', strtotime($c['dateFin'])); ?></td>
                     <td><?php echo htmlspecialchars($c['nb_clubs']); ?></td>
                     <td><?php echo htmlspecialchars($c['nb_dessins']); ?></td>
-                    <td><?php echo htmlspecialchars($c['etat']); ?></td>
+                    <td>
+                        <span class="status-badge status-<?php echo strtolower(str_replace(' ', '-', $c['etat'])); ?>">
+                            <?php echo htmlspecialchars($c['etat']); ?>
+                        </span>
+                    </td>
                     <td class="table-actions">
                         <a href="edit_concours.php?id=<?php echo $c['numConcours']; ?>" class="btn-small btn-edit">Modifier</a>
                         <a href="delete_concours.php?id=<?php echo $c['numConcours']; ?>" 

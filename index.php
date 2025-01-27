@@ -496,7 +496,6 @@
             <a href="#home">Accueil</a>
             <a href="#about">À propos</a>
             <a href="#contests">Concours</a>
-            <a href="request.php">Requêtes SQL</a>
             <a href="login.php">Connexion</a>
         </div>
     </nav>

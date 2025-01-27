@@ -3,7 +3,7 @@ session_start();
 require_once('../includes/config.php');
 checkUserRole('evaluateur');
 
-// Remplacer la première requête par celle-ci
+// Modification de la première requête pour inclure les informations de compétiteur
 $stmt = $db->prepare("
     SELECT 
         e.numEvaluateur,
@@ -12,13 +12,18 @@ $stmt = $db->prepare("
         u.nom,
         u.prenom,
         c.nomClub,
-        COALESCE(AVG(ev.note), 0) as noteMoyenne
+        COALESCE(AVG(ev.note), 0) as noteMoyenne,
+        comp.numCompetiteur as estCompetiteur,
+        comp.nbDessinSoumis,
+        comp.datePremiereParticipation
     FROM Evaluateur e
     JOIN Utilisateur u ON e.numEvaluateur = u.numUtilisateur
     LEFT JOIN Club c ON u.numClub = c.numClub
     LEFT JOIN Evaluation ev ON e.numEvaluateur = ev.numEvaluateur
+    LEFT JOIN Competiteur comp ON e.numEvaluateur = comp.numCompetiteur
     WHERE e.numEvaluateur = ?
-    GROUP BY e.numEvaluateur, e.specialite, u.nom, u.prenom, c.nomClub
+    GROUP BY e.numEvaluateur, e.specialite, u.nom, u.prenom, c.nomClub, 
+             comp.numCompetiteur, comp.nbDessinSoumis, comp.datePremiereParticipation
 ");
 $stmt->execute([$_SESSION['user_id']]);
 $evaluateurInfo = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -304,6 +309,24 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 max-width: 100%;
             }
         }
+
+        .dual-role-info {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+
+        .dual-role-info h3 {
+            color: var(--accent);
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .dual-role-info p {
+            font-size: 0.9rem;
+            margin: 0.25rem 0;
+        }
     </style>
 </head>
 <body>
@@ -329,6 +352,13 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <h2><?= htmlspecialchars($evaluateurInfo['prenom'] . ' ' . $evaluateurInfo['nom']) ?></h2>
                 <p>Évaluateur - <?= htmlspecialchars($evaluateurInfo['specialite']) ?></p>
                 <p>Club: <?= htmlspecialchars($evaluateurInfo['nomClub']) ?></p>
+                <?php if ($evaluateurInfo['estCompetiteur']): ?>
+                    <div class="dual-role-info">
+                        <h3>Également Compétiteur</h3>
+                        <p>Dessins soumis: <?= $evaluateurInfo['nbDessinSoumis'] ?></p>
+                        <p>Première participation: <?= date('d/m/Y', strtotime($evaluateurInfo['datePremiereParticipation'])) ?></p>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -345,6 +375,12 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <div class="stat-value" id="noteMoyenne"><?= number_format($evaluateurInfo['noteMoyenne'], 1) ?></div>
                 <div class="stat-label">Note moyenne donnée</div>
             </div>
+            <?php if ($evaluateurInfo['estCompetiteur']): ?>
+                <div class="stat-card">
+                    <div class="stat-value" id="dessinsSubmitted"><?= $evaluateurInfo['nbDessinSoumis'] ?></div>
+                    <div class="stat-label">Dessins soumis en tant que compétiteur</div>
+                </div>
+            <?php endif; ?>
         </div>
 
         <h2 class="section-title">Dessins à évaluer (<?= count($dessinsAEvaluer) ?>)</h2>

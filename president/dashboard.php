@@ -37,17 +37,12 @@ $stmt = $db->prepare("
 $stmt->execute([$_SESSION['user_id']]);
 $concours = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Statistiques du club incluant les résultats des concours
+// Statistiques du club
 $stmt = $db->prepare("
     SELECT 
         COUNT(DISTINCT comp.numCompetiteur) as total_competiteurs,
         COUNT(DISTINCT e.numEvaluateur) as total_evaluateurs,
         COUNT(DISTINCT d.numDessin) as total_dessins,
-        (SELECT COUNT(*) 
-         FROM Dessin d2 
-         JOIN Competiteur comp2 ON d2.numCompetiteur = comp2.numCompetiteur
-         JOIN Utilisateur u2 ON comp2.numCompetiteur = u2.numUtilisateur
-         WHERE u2.numClub = c.numClub AND d2.classement <= 3) as nb_podiums,
         (SELECT AVG(note)
          FROM Evaluation ev
          JOIN Dessin d3 ON ev.numDessin = d3.numDessin
@@ -65,21 +60,21 @@ $stmt = $db->prepare("
 $stmt->execute([$presidentInfo['numClub']]);
 $stats = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Récupération des meilleurs compétiteurs du club
+// Récupération des compétiteurs actifs du club
 $stmt = $db->prepare("
     SELECT 
         u.nom,
         u.prenom,
         COUNT(d.numDessin) as nb_participations,
         AVG(ev.note) as moyenne_notes,
-        COUNT(CASE WHEN d.classement <= 3 THEN 1 END) as nb_podiums
+        comp.datePremiereParticipation
     FROM Utilisateur u
     JOIN Competiteur comp ON u.numUtilisateur = comp.numCompetiteur
     LEFT JOIN Dessin d ON comp.numCompetiteur = d.numCompetiteur
     LEFT JOIN Evaluation ev ON d.numDessin = ev.numDessin
     WHERE u.numClub = ?
     GROUP BY u.numUtilisateur
-    ORDER BY moyenne_notes DESC
+    ORDER BY nb_participations DESC, moyenne_notes DESC
     LIMIT 5
 ");
 $stmt->execute([$presidentInfo['numClub']]);
@@ -137,11 +132,12 @@ $topCompetiteurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         }
 
-        .concours-list {
+        .concours-list, .top-competiteurs {
             background: white;
             border-radius: 15px;
             padding: 1.5rem;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
         }
 
         .action-buttons {
@@ -284,6 +280,44 @@ $topCompetiteurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 padding: 1rem;
             }
         }
+
+        .top-competiteurs h2 {
+            color: #004e92;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .top-competiteurs table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            background: #fff;
+        }
+
+        .top-competiteurs th {
+            background: #f8f9fa;
+            color: #004e92;
+            font-weight: 600;
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .top-competiteurs td {
+            padding: 1rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .top-competiteurs tr:hover {
+            background-color: #f8f9fa;
+            transition: background-color 0.3s ease;
+        }
+
+        .top-competiteurs tr:last-child td {
+            border-bottom: none;
+        }
     </style>
 </head>
 <body>
@@ -294,9 +328,6 @@ $topCompetiteurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
         <div class="nav-links">
             <a href="#dashboard">Tableau de bord</a>
-            <a href="#concours">Concours</a>
-            <a href="#evaluateurs">Évaluateurs</a>
-            <a href="#profil">Profil</a>
             <a href="../logout.php">Déconnexion</a>
         </div>
     </nav>
@@ -324,11 +355,11 @@ $topCompetiteurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="stats-container">
                 <div class="stat-card">
                     <div class="stat-value"><?= $presidentInfo['nombreAdherents'] ?></div>
-                    <div class="stat-label">Membres totaux</div>
+                    <div class="stat-label">Membres du club</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value"><?= $stats['total_competiteurs'] ?></div>
-                    <div class="stat-label">Compétiteurs</div>
+                    <div class="stat-label">Compétiteurs actifs</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value"><?= $stats['total_evaluateurs'] ?></div>
@@ -336,11 +367,7 @@ $topCompetiteurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 </div>
                 <div class="stat-card">
                     <div class="stat-value"><?= number_format($stats['moyenne_club'], 2) ?></div>
-                    <div class="stat-label">Moyenne du club</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value"><?= $stats['nb_podiums'] ?></div>
-                    <div class="stat-label">Podiums obtenus</div>
+                    <div class="stat-label">Moyenne des notes</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value"><?= $stats['total_dessins'] ?></div>
@@ -380,15 +407,15 @@ $topCompetiteurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
 
             <div class="top-competiteurs">
-                <h2>Meilleurs compétiteurs</h2>
+                <h2>Compétiteurs les plus actifs</h2>
                 <table>
                     <thead>
                         <tr>
                             <th>Nom</th>
                             <th>Prénom</th>
-                            <th>Participations</th>
-                            <th>Moyenne</th>
-                            <th>Podiums</th>
+                            <th>Première participation</th>
+                            <th>Nombre de participations</th>
+                            <th>Moyenne des notes</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -396,9 +423,9 @@ $topCompetiteurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <tr>
                                 <td><?= htmlspecialchars($comp['nom']) ?></td>
                                 <td><?= htmlspecialchars($comp['prenom']) ?></td>
+                                <td><?= $comp['datePremiereParticipation'] ?></td>
                                 <td><?= $comp['nb_participations'] ?></td>
                                 <td><?= number_format($comp['moyenne_notes'], 2) ?></td>
-                                <td><?= $comp['nb_podiums'] ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>

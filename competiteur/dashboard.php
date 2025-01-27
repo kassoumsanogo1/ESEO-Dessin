@@ -1,30 +1,43 @@
 <?php
 session_start();
 require_once('../includes/config.php');
-checkUserRole('competiteur');
 
-// Récupération des informations du compétiteur
+// Récupération des informations de l'utilisateur
 $stmt = $db->prepare("
-    SELECT c.*, u.nom, u.prenom, cl.nomClub
-    FROM Competiteur c
-    JOIN Utilisateur u ON c.numCompetiteur = u.numUtilisateur
+    SELECT c.*, u.nom, u.prenom, cl.nomClub, e.specialite as evalSpecialite 
+    FROM Utilisateur u
     LEFT JOIN Club cl ON u.numClub = cl.numClub
-    WHERE c.numCompetiteur = ?
+    LEFT JOIN Competiteur c ON c.numCompetiteur = u.numUtilisateur
+    LEFT JOIN Evaluateur e ON e.numEvaluateur = u.numUtilisateur
+    WHERE u.numUtilisateur = ?
 ");
 $stmt->execute([$_SESSION['user_id']]);
-$competiteurInfo = $stmt->fetch(PDO::FETCH_ASSOC);
+$userInfo = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Récupération des concours disponibles
-$stmt = $db->prepare("
-    SELECT c.*, COUNT(d.numDessin) as nb_dessins_soumis
+// Récupération des concours où l'utilisateur est compétiteur
+$stmtCompetiteur = $db->prepare("
+    SELECT c.*, COUNT(d.numDessin) as nb_dessins_soumis,
+           CASE 
+               WHEN j.numEvaluateur IS NOT NULL THEN 'evaluateur'
+               WHEN pc.numCompetiteur IS NOT NULL THEN 'competiteur'
+           END as role
     FROM Concours c
     LEFT JOIN Dessin d ON c.numConcours = d.numConcours 
         AND d.numCompetiteur = ?
+    LEFT JOIN Jury j ON c.numConcours = j.numConcours 
+        AND j.numEvaluateur = ?
+    LEFT JOIN ParticipeCompetiteur pc ON c.numConcours = pc.numConcours 
+        AND pc.numCompetiteur = ?
     WHERE c.etat = 'en cours'
+        AND (j.numEvaluateur IS NOT NULL OR pc.numCompetiteur IS NOT NULL)
     GROUP BY c.numConcours
 ");
-$stmt->execute([$_SESSION['user_id']]);
-$concours = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$stmtCompetiteur->execute([
+    $_SESSION['user_id'],
+    $_SESSION['user_id'],
+    $_SESSION['user_id']
+]);
+$concours = $stmtCompetiteur->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
@@ -259,28 +272,28 @@ $concours = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     <div class="dashboard">
         <main class="main-content">
-            <h1>Bienvenue Compétiteur(e), <?php echo htmlspecialchars($competiteurInfo['prenom']); ?></h1>
+            <h1>Bienvenue, <?php echo htmlspecialchars($userInfo['prenom']); ?></h1>
             
             <div class="stats-grid">
                 <div class="stat-card">
                     <h3>Nom</h3>
-                    <p><?php echo htmlspecialchars($competiteurInfo['nom']); ?></p>
+                    <p><?php echo htmlspecialchars($userInfo['nom']); ?></p>
                 </div>
                 <div class="stat-card">
                     <h3>Prénom</h3>
-                    <p><?php echo htmlspecialchars($competiteurInfo['prenom']); ?></p>
+                    <p><?php echo htmlspecialchars($userInfo['prenom']); ?></p>
                 </div>
                 <div class="stat-card">
                     <h3>Club</h3>
-                    <p><?php echo htmlspecialchars($competiteurInfo['nomClub']); ?></p>
+                    <p><?php echo htmlspecialchars($userInfo['nomClub']); ?></p>
                 </div>
                 <div class="stat-card">
                     <h3>Dessins soumis</h3>
-                    <p><?php echo $competiteurInfo['nbDessinSoumis']; ?></p>
+                    <p><?php echo $userInfo['nbDessinSoumis']; ?></p>
                 </div>
                 <div class="stat-card">
                     <h3>Date d'inscription</h3>
-                    <p><?php echo $competiteurInfo['datePremiereParticipation']; ?></p>
+                    <p><?php echo $userInfo['datePremiereParticipation']; ?></p>
                 </div>
             </div>
 
@@ -288,15 +301,22 @@ $concours = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <?php foreach ($concours as $c): ?>
                 <div class="concours-card">
                     <h3><?php echo htmlspecialchars($c['theme']); ?></h3>
-                    <p>Dessins soumis: <?php echo $c['nb_dessins_soumis']; ?>/3</p>
-                    <?php if ($c['nb_dessins_soumis'] < 3): ?>
-                        <form class="upload-form" method="post" action="soumettre_dessin.php" enctype="multipart/form-data">
-                            <input type="hidden" name="numConcours" value="<?php echo $c['numConcours']; ?>">
-                            <div class="dessin-upload">
-                                <input type="file" name="dessin" required accept="image/*">
-                            </div>
-                            <button type="submit" class="btn btn-primary">Soumettre</button>
-                        </form>
+                    <?php if ($c['role'] === 'competiteur'): ?>
+                        <p>Dessins soumis: <?php echo $c['nb_dessins_soumis']; ?>/3</p>
+                        <?php if ($c['nb_dessins_soumis'] < 3): ?>
+                            <form class="upload-form" method="post" action="soumettre_dessin.php" enctype="multipart/form-data">
+                                <input type="hidden" name="numConcours" value="<?php echo $c['numConcours']; ?>">
+                                <div class="dessin-upload">
+                                    <input type="file" name="dessin" required accept="image/*">
+                                </div>
+                                <button type="submit" class="btn btn-primary">Soumettre</button>
+                            </form>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <p>Vous êtes évaluateur pour ce concours</p>
+                        <a href="../evaluateur/evaluation.php?concours=<?php echo $c['numConcours']; ?>" class="btn btn-primary">
+                            Accéder aux évaluations
+                        </a>
                     <?php endif; ?>
                 </div>
             <?php endforeach; ?>
