@@ -519,7 +519,7 @@
             <p>Montrez votre talent artistique en participant aux concours ESEO'Dessin</p>
             <div class="choice-buttons">
                 <button class="choice-button login-btn" onclick="window.location.href='login.php'">Connexion</button>
-                <button class="choice-button register-btn" onclick="window.location.href='register.php'">Inscription</button>
+                <button class="choice-button register-btn" onclick="window.location.href='registration.php'">Inscription</button>
             </div>
         </div>
     </div>

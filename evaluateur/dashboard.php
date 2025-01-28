@@ -48,6 +48,33 @@ $stmt = $db->prepare("
 $stmt->execute([$_SESSION['user_id']]);
 $evaluateurInfo = $stmt->fetch(PDO::FETCH_ASSOC);
 
+// Après la requête pour $evaluateurInfo, ajoutez cette nouvelle requête pour récupérer les dessins soumis
+if ($evaluateurInfo['estCompetiteur']) {
+    $stmt = $db->prepare("
+        SELECT 
+            d.numDessin,
+            d.leDessin,
+            d.dateRemise,
+            d.commentaire,
+            c.theme,
+            c.numConcours,
+            GROUP_CONCAT(
+                CONCAT(
+                    e.commentaire, 
+                    ' (Note: ', e.note, ')'
+                ) SEPARATOR '||'
+            ) as evaluations
+        FROM Dessin d
+        JOIN Concours c ON d.numConcours = c.numConcours
+        LEFT JOIN Evaluation e ON d.numDessin = e.numDessin
+        WHERE d.numCompetiteur = ?
+        GROUP BY d.numDessin, d.leDessin, d.dateRemise, d.commentaire, c.theme, c.numConcours
+        ORDER BY d.dateRemise DESC
+    ");
+    $stmt->execute([$_SESSION['user_id']]);
+    $dessinsSubmis = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 // Optimisation de la requête pour les dessins à évaluer
 $stmt = $db->prepare("
     SELECT 
@@ -375,6 +402,93 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 transform: translate(-50%, -50%) scale(1); 
             }
         }
+
+        .mes-dessins-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .dessin-soumis-card {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+        }
+
+        .dessin-soumis-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .dessin-soumis-header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            padding: 1.5rem;
+            color: white;
+        }
+
+        .dessin-soumis-header h3 {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .date-soumission {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .dessin-soumis-content {
+            padding: 1.5rem;
+        }
+
+        .theme-concours {
+            margin-bottom: 1rem;
+            color: var(--text-dark);
+            font-size: 1.1rem;
+        }
+
+        .evaluations-recues {
+            background: var(--bg-light);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        .evaluations-recues h4 {
+            color: var(--primary);
+            margin-bottom: 0.8rem;
+            font-size: 1rem;
+        }
+
+        .evaluations-recues ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .evaluations-recues li {
+            padding: 0.8rem;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            font-size: 0.9rem;
+        }
+
+        .evaluations-recues li:last-child {
+            border-bottom: none;
+        }
+
+        .no-evaluation {
+            color: #666;
+            font-style: italic;
+            text-align: center;
+            padding: 1rem;
+        }
+
+        .section-title {
+            margin-top: 3rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--primary);
+        }
     </style>
 </head>
 <body>
@@ -401,7 +515,7 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <?php if ($evaluateurInfo['estCompetiteur']): ?>
                     <div class="dual-role-info">
                         <h3>Également Compétiteur</h3>
-                        <p>Dessins soumis : <?= $evaluateurInfo['nbDessinSoumis'] ?></p>
+                        <p>Dessins soumis : <?= count($dessinsSubmis) ?></p>
                         <p>Première participation: <?= date('d/m/Y', strtotime($evaluateurInfo['datePremiereParticipation'])) ?></p>
                     </div>
                 <?php endif; ?>
@@ -423,7 +537,7 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
             <?php if ($evaluateurInfo['estCompetiteur']): ?>
                 <div class="stat-card">
-                    <div class="stat-value" id="dessinsSubmitted"><?= $evaluateurInfo['nbDessinSoumis'] ?></div>
+                    <div class="stat-value" id="dessinsSubmitted"><?= count($dessinsSubmis) ?></div>
                     <div class="stat-label">Dessins soumis en tant que compétiteur</div>
                 </div>
             <?php endif; ?>
@@ -496,6 +610,47 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
             <?php endforeach; ?>
         </div>
+        <?php endif; ?>
+
+        <?php if ($evaluateurInfo['estCompetiteur'] && !empty($dessinsSubmis)): ?>
+            <h2 class="section-title">Mes Dessins Soumis (<?= count($dessinsSubmis) ?>)</h2>
+            <div class="mes-dessins-container">
+                <?php foreach ($dessinsSubmis as $dessin): ?>
+                    <div class="dessin-soumis-card">
+                        <div class="dessin-soumis-header">
+                            <h3><?= htmlspecialchars($dessin['leDessin']) ?></h3>
+                            <span class="date-soumission">
+                                <i class="far fa-calendar-alt"></i> 
+                                <?= date('d/m/Y', strtotime($dessin['dateRemise'])) ?>
+                            </span>
+                        </div>
+                        <div class="dessin-soumis-content">
+                            <p class="theme-concours">
+                                <strong>Thème :</strong> 
+                                <?= htmlspecialchars($dessin['theme']) ?>
+                            </p>
+                            <?php if ($dessin['evaluations']): ?>
+                                <div class="evaluations-recues">
+                                    <h4>
+                                        <i class="far fa-comment-dots"></i> 
+                                        Évaluations reçues
+                                    </h4>
+                                    <ul>
+                                        <?php foreach (explode('||', $dessin['evaluations']) as $evaluation): ?>
+                                            <li><?= htmlspecialchars($evaluation) ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                            <?php else: ?>
+                                <p class="no-evaluation">
+                                    <i class="far fa-clock"></i> 
+                                    En attente d'évaluation
+                                </p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
         <?php endif; ?>
 
         <!-- Modal pour l'aperçu des images -->
