@@ -3,33 +3,43 @@ session_start();
 require_once('../includes/config.php');
 checkUserRole('president');
 
-// Récupération des informations du président et du club
+// Récupération des informations du président
 $stmt = $db->prepare("
-    SELECT u.*, c.*, p.prime
+    SELECT u.*, p.prime
     FROM Utilisateur u
     JOIN President p ON u.numUtilisateur = p.numPresident
-    JOIN Club c ON u.numClub = c.numClub
     WHERE u.numUtilisateur = ?
 ");
 $stmt->execute([$_SESSION['user_id']]);
 $presidentInfo = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Récupération des concours organisés par le président avec statistiques détaillées
+// Récupération des concours présidés avec statistiques détaillées
 $stmt = $db->prepare("
     SELECT 
         c.*,
-        COUNT(DISTINCT pc.numClub) as nb_clubs_participants,
-        COUNT(DISTINCT pcomp.numCompetiteur) as nb_participants,
+        COUNT(DISTINCT pc.numClub) as nb_clubs,
+        COUNT(DISTINCT pcomp.numCompetiteur) as nb_competiteurs,
         COUNT(DISTINCT d.numDessin) as nb_dessins,
-        COUNT(DISTINCT e.numEvaluateur) as nb_evaluateurs,
-        AVG(ev.note) as moyenne_notes
+        COUNT(DISTINCT j.numEvaluateur) as nb_evaluateurs,
+        AVG(e.note) as moyenne_notes,
+        MIN(e.note) as note_min,
+        MAX(e.note) as note_max,
+        (
+            SELECT COUNT(*)
+            FROM Dessin d2
+            WHERE d2.numConcours = c.numConcours
+            AND EXISTS (
+                SELECT 1 
+                FROM Evaluation e2 
+                WHERE e2.numDessin = d2.numDessin
+            )
+        ) as dessins_evalues
     FROM Concours c
     LEFT JOIN ParticipeClub pc ON c.numConcours = pc.numConcours
     LEFT JOIN ParticipeCompetiteur pcomp ON c.numConcours = pcomp.numConcours
     LEFT JOIN Dessin d ON c.numConcours = d.numConcours
+    LEFT JOIN Evaluation e ON d.numDessin = e.numDessin
     LEFT JOIN Jury j ON c.numConcours = j.numConcours
-    LEFT JOIN Evaluateur e ON j.numEvaluateur = e.numEvaluateur
-    LEFT JOIN Evaluation ev ON d.numDessin = ev.numDessin
     WHERE c.numPresident = ?
     GROUP BY c.numConcours
     ORDER BY c.dateDebut DESC
@@ -37,48 +47,54 @@ $stmt = $db->prepare("
 $stmt->execute([$_SESSION['user_id']]);
 $concours = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Statistiques du club
+// Récupération des meilleurs dessins tous concours confondus
 $stmt = $db->prepare("
     SELECT 
-        COUNT(DISTINCT comp.numCompetiteur) as total_competiteurs,
-        COUNT(DISTINCT e.numEvaluateur) as total_evaluateurs,
-        COUNT(DISTINCT d.numDessin) as total_dessins,
-        (SELECT AVG(note)
-         FROM Evaluation ev
-         JOIN Dessin d3 ON ev.numDessin = d3.numDessin
-         JOIN Competiteur comp3 ON d3.numCompetiteur = comp3.numCompetiteur
-         JOIN Utilisateur u3 ON comp3.numCompetiteur = u3.numUtilisateur
-         WHERE u3.numClub = c.numClub) as moyenne_club
-    FROM Club c
-    LEFT JOIN Utilisateur u ON c.numClub = u.numClub
-    LEFT JOIN Competiteur comp ON u.numUtilisateur = comp.numCompetiteur
-    LEFT JOIN Evaluateur e ON u.numUtilisateur = e.numEvaluateur
-    LEFT JOIN Dessin d ON comp.numCompetiteur = d.numCompetiteur
-    WHERE c.numClub = ?
-    GROUP BY c.numClub
+        d.numDessin,
+        d.leDessin,
+        d.dateRemise,
+        c.theme,
+        u.nom,
+        u.prenom,
+        cl.nomClub,
+        AVG(e.note) as moyenne_note
+    FROM Concours c
+    JOIN Dessin d ON c.numConcours = d.numConcours
+    JOIN Competiteur comp ON d.numCompetiteur = comp.numCompetiteur
+    JOIN Utilisateur u ON comp.numCompetiteur = u.numUtilisateur
+    JOIN Club cl ON u.numClub = cl.numClub
+    JOIN Evaluation e ON d.numDessin = e.numDessin
+    WHERE c.numPresident = ?
+    GROUP BY d.numDessin
+    HAVING COUNT(e.numEvaluateur) >= 2
+    ORDER BY moyenne_note DESC
+    LIMIT 5
 ");
-$stmt->execute([$presidentInfo['numClub']]);
-$stats = $stmt->fetch(PDO::FETCH_ASSOC);
+$stmt->execute([$_SESSION['user_id']]);
+$meilleursDessinsTousTemps = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Récupération des compétiteurs actifs du club
+// Récupération des statistiques des évaluateurs
 $stmt = $db->prepare("
     SELECT 
         u.nom,
         u.prenom,
-        COUNT(d.numDessin) as nb_participations,
-        AVG(ev.note) as moyenne_notes,
-        comp.datePremiereParticipation
-    FROM Utilisateur u
-    JOIN Competiteur comp ON u.numUtilisateur = comp.numCompetiteur
-    LEFT JOIN Dessin d ON comp.numCompetiteur = d.numCompetiteur
-    LEFT JOIN Evaluation ev ON d.numDessin = ev.numDessin
-    WHERE u.numClub = ?
-    GROUP BY u.numUtilisateur
-    ORDER BY nb_participations DESC, moyenne_notes DESC
+        COUNT(DISTINCT e.numDessin) as nb_evaluations,
+        AVG(e.note) as moyenne_notes_donnees,
+        ev.specialite
+    FROM Jury j
+    JOIN Evaluateur ev ON j.numEvaluateur = ev.numEvaluateur
+    JOIN Utilisateur u ON ev.numEvaluateur = u.numUtilisateur
+    JOIN Evaluation e ON ev.numEvaluateur = e.numEvaluateur
+    JOIN Dessin d ON e.numDessin = d.numDessin
+    JOIN Concours c ON d.numConcours = c.numConcours
+    WHERE c.numPresident = ?
+    GROUP BY ev.numEvaluateur
+    ORDER BY nb_evaluations DESC
     LIMIT 5
 ");
-$stmt->execute([$presidentInfo['numClub']]);
-$topCompetiteurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$stmt->execute([$_SESSION['user_id']]);
+$topEvaluateurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
 ?>
 
 <!DOCTYPE html>
@@ -346,60 +362,57 @@ $topCompetiteurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <p><?= htmlspecialchars($presidentInfo['prenom']) ?></p>
                     </div>
                     <div class="stat-card">
-                        <h4>Club</h4>
-                        <p><?= htmlspecialchars($presidentInfo['nomClub']) ?></p>
+                        <h4>Prime</h4>
+                        <p><?= number_format($presidentInfo['prime'], 2) ?> €</p>
                     </div>
                 </div>
             </div>
 
             <div class="stats-container">
                 <div class="stat-card">
-                    <div class="stat-value"><?= $presidentInfo['nombreAdherents'] ?></div>
-                    <div class="stat-label">Membres du club</div>
+                    <div class="stat-value"><?= count($concours) ?></div>
+                    <div class="stat-label">Concours présidés</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value"><?= $stats['total_competiteurs'] ?></div>
-                    <div class="stat-label">Compétiteurs actifs</div>
+                    <div class="stat-value"><?= array_sum(array_column($concours, 'nb_clubs')) ?></div>
+                    <div class="stat-label">Clubs participants total</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value"><?= $stats['total_evaluateurs'] ?></div>
-                    <div class="stat-label">Évaluateurs</div>
+                    <div class="stat-value"><?= array_sum(array_column($concours, 'nb_dessins')) ?></div>
+                    <div class="stat-label">Dessins soumis total</div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-value"><?= number_format($stats['moyenne_club'], 2) ?></div>
-                    <div class="stat-label">Moyenne des notes</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value"><?= $stats['total_dessins'] ?></div>
-                    <div class="stat-label">Dessins soumis</div>
-                </div>
-            </div>
-
-            <div class="action-buttons">
-                <button class="btn btn-primary">Nouveau concours</button>
-                <button class="btn btn-primary">Gérer les évaluateurs</button>
             </div>
 
             <div class="concours-list">
-                <h2>Concours en cours</h2>
+                <h2>Détails des concours présidés</h2>
                 <table>
                     <thead>
                         <tr>
                             <th>Thème</th>
                             <th>Saison</th>
-                            <th>Date début</th>
-                            <th>Date fin</th>
+                            <th>Période</th>
                             <th>État</th>
+                            <th>Clubs</th>
+                            <th>Compétiteurs</th>
+                            <th>Dessins</th>
+                            <th>Évaluateurs</th>
+                            <th>Moyenne</th>
+                            <th>% Évalués</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($concours as $c): ?>
                             <tr>
-                                <td><?php echo htmlspecialchars($c['theme']); ?></td>
-                                <td><?php echo htmlspecialchars($c['saison']); ?></td>
-                                <td><?php echo $c['dateDebut']; ?></td>
-                                <td><?php echo $c['dateFin']; ?></td>
-                                <td><?php echo htmlspecialchars($c['etat']); ?></td>
+                                <td><?= htmlspecialchars($c['theme']) ?></td>
+                                <td><?= htmlspecialchars($c['saison']) ?></td>
+                                <td><?= $c['dateDebut'] ?> au <?= $c['dateFin'] ?></td>
+                                <td><?= htmlspecialchars($c['etat']) ?></td>
+                                <td><?= $c['nb_clubs'] ?></td>
+                                <td><?= $c['nb_competiteurs'] ?></td>
+                                <td><?= $c['nb_dessins'] ?></td>
+                                <td><?= $c['nb_evaluateurs'] ?></td>
+                                <td><?= number_format($c['moyenne_notes'], 2) ?></td>
+                                <td><?= $c['nb_dessins'] ? number_format(($c['dessins_evalues'] / $c['nb_dessins']) * 100, 1) : 0 ?>%</td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -407,25 +420,53 @@ $topCompetiteurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
 
             <div class="top-competiteurs">
-                <h2>Compétiteurs les plus actifs</h2>
+                <h2>Meilleurs dessins tous concours confondus</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Dessin</th>
+                            <th>Thème</th>
+                            <th>Artiste</th>
+                            <th>Club</th>
+                            <th>Date</th>
+                            <th>Note moyenne</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($meilleursDessinsTousTemps as $dessin): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($dessin['leDessin']) ?></td>
+                                <td><?= htmlspecialchars($dessin['theme']) ?></td>
+                                <td><?= htmlspecialchars($dessin['prenom']) ?> <?= htmlspecialchars($dessin['nom']) ?></td>
+                                <td><?= htmlspecialchars($dessin['nomClub']) ?></td>
+                                <td><?= $dessin['dateRemise'] ?></td>
+                                <td><?= number_format($dessin['moyenne_note'], 2) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="top-competiteurs">
+                <h2>Statistiques des évaluateurs</h2>
                 <table>
                     <thead>
                         <tr>
                             <th>Nom</th>
                             <th>Prénom</th>
-                            <th>Première participation</th>
-                            <th>Nombre de participations</th>
-                            <th>Moyenne des notes</th>
+                            <th>Spécialité</th>
+                            <th>Nombre d'évaluations</th>
+                            <th>Moyenne des notes données</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($topCompetiteurs as $comp): ?>
+                        <?php foreach ($topEvaluateurs as $eval): ?>
                             <tr>
-                                <td><?= htmlspecialchars($comp['nom']) ?></td>
-                                <td><?= htmlspecialchars($comp['prenom']) ?></td>
-                                <td><?= $comp['datePremiereParticipation'] ?></td>
-                                <td><?= $comp['nb_participations'] ?></td>
-                                <td><?= number_format($comp['moyenne_notes'], 2) ?></td>
+                                <td><?= htmlspecialchars($eval['nom']) ?></td>
+                                <td><?= htmlspecialchars($eval['prenom']) ?></td>
+                                <td><?= htmlspecialchars($eval['specialite']) ?></td>
+                                <td><?= $eval['nb_evaluations'] ?></td>
+                                <td><?= number_format($eval['moyenne_notes_donnees'], 2) ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -435,8 +476,5 @@ $topCompetiteurs = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        // ... Scripts existants ...
-    </script>
 </body>
 </html>

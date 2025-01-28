@@ -3,6 +3,26 @@ session_start();
 require_once('../includes/config.php');
 checkUserRole('evaluateur');
 
+// Définir le tableau des images de dessins
+$dessinImages = [
+    '../dessin/dessin1.png',
+    '../dessin/dessin2.png',
+    '../dessin/dessin3.png',
+    '../dessin/dessin4.png',
+    '../dessin/dessin5.png',
+    '../dessin/dessin6.png',
+    '../dessin/dessin7.png',
+    '../dessin/dessin8.png',
+    '../dessin/dessin9.png',
+    '../dessin/dessin10.png',
+    '../dessin/dessin11.png',
+    '../dessin/dessin12.png',
+    '../dessin/dessin13.png',
+    '../dessin/dessin14.png',
+    '../dessin/dessin15.png',
+    '../dessin/dessin16.png'
+];
+
 // Modification de la première requête pour inclure les informations de compétiteur
 $stmt = $db->prepare("
     SELECT 
@@ -32,7 +52,6 @@ $evaluateurInfo = $stmt->fetch(PDO::FETCH_ASSOC);
 $stmt = $db->prepare("
     SELECT 
         d.numDessin,
-        d.leDessin,
         c.theme,
         CONCAT(u.prenom, ' ', u.nom) as competiteur_nom
     FROM Dessin d
@@ -327,6 +346,35 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
             font-size: 0.9rem;
             margin: 0.25rem 0;
         }
+
+        /* Modifier le style de la notification */
+        .notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(76, 175, 80, 0.95);
+            color: white;
+            padding: 20px 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            display: none;
+            z-index: 1000;
+            text-align: center;
+            font-size: 1.2rem;
+            animation: fadeInScale 0.3s ease-out;
+        }
+
+        @keyframes fadeInScale {
+            from { 
+                opacity: 0; 
+                transform: translate(-50%, -50%) scale(0.8); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translate(-50%, -50%) scale(1); 
+            }
+        }
     </style>
 </head>
 <body>
@@ -337,8 +385,6 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
         <div class="nav-links">
             <a href="#dashboard">Tableau de bord</a>
-            <a href="#evaluations">Évaluations</a>
-            <a href="#historique">Historique</a>
             <a href="../logout.php">Déconnexion</a>
         </div>
     </nav>
@@ -355,7 +401,7 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <?php if ($evaluateurInfo['estCompetiteur']): ?>
                     <div class="dual-role-info">
                         <h3>Également Compétiteur</h3>
-                        <p>Dessins soumis: <?= $evaluateurInfo['nbDessinSoumis'] ?></p>
+                        <p>Dessins soumis : <?= $evaluateurInfo['nbDessinSoumis'] ?></p>
                         <p>Première participation: <?= date('d/m/Y', strtotime($evaluateurInfo['datePremiereParticipation'])) ?></p>
                     </div>
                 <?php endif; ?>
@@ -392,14 +438,14 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
         <?php else: ?>
         <div class="evaluation-grid">
-            <?php foreach ($dessinsAEvaluer as $dessin): ?>
+            <?php foreach ($dessinsAEvaluer as $index => $dessin): ?>
             <div class="dessin-card" data-dessin-id="<?= $dessin['numDessin'] ?>">
                 <div class="dessin-header">
                     <h3><?= htmlspecialchars($dessin['theme']) ?></h3>
                     <span class="badge">En attente</span>
                 </div>
-                <div class="dessin-preview" onclick="openImageModal('<?= htmlspecialchars($dessin['leDessin']) ?>')">
-                    <img src="<?= htmlspecialchars($dessin['leDessin']) ?>" 
+                <div class="dessin-preview" onclick="openImageModal('<?= htmlspecialchars($dessinImages[$index % 16]) ?>')">
+                    <img src="<?= htmlspecialchars($dessinImages[$index % 16]) ?>" 
                          alt="Dessin à évaluer" 
                          class="dessin-image"
                          loading="lazy">
@@ -428,7 +474,7 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         </div>
                     </div>
                 </div>
-                <form class="evaluation-form" method="post" action="evaluer.php" onsubmit="return validateForm(this)">
+                <form class="evaluation-form" method="post" action="evaluer.php" onsubmit="return handleSubmit(event, this)">
                     <input type="hidden" name="numDessin" value="<?= $dessin['numDessin'] ?>">
                     <input type="hidden" name="note" class="final-note">
                     <div class="form-group">
@@ -458,6 +504,12 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <span class="close-modal">&times;</span>
                 <img id="modalImage" src="" alt="Aperçu du dessin">
             </div>
+        </div>
+
+        <!-- Modifier le contenu de la notification -->
+        <div class="notification" id="successNotification">
+            <span style="font-size: 2rem;">✅</span><br>
+            Évaluation soumise avec succès !
         </div>
 
         <style>
@@ -601,6 +653,16 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     alert('Le commentaire doit contenir au moins 20 caractères');
                     return false;
                 }
+
+                // Afficher la notification
+                const notification = document.getElementById('successNotification');
+                notification.style.display = 'block';
+                
+                // Cacher la notification après 3 secondes
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                }, 3000);
+
                 return true;
             }
 
@@ -624,6 +686,30 @@ $dessinsAEvaluer = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         `${count}/200`;
                 });
             });
+
+            function handleSubmit(event, form) {
+                event.preventDefault(); // Empêche la soumission du formulaire
+                
+                const commentaire = form.querySelector('textarea').value;
+                if (commentaire.length < 20) {
+                    alert('Le commentaire doit contenir au moins 20 caractères');
+                    return false;
+                }
+
+                // Afficher la notification
+                const notification = document.getElementById('successNotification');
+                notification.style.display = 'block';
+                
+                // Cacher la notification après 3 secondes
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                }, 3000);
+
+                // Réinitialiser le formulaire
+                form.reset();
+                
+                return false; // Empêche la redirection
+            }
         </script>
     </main>
 

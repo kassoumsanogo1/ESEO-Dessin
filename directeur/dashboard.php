@@ -30,13 +30,83 @@ $stmt = $db->prepare("
 $stmt->execute([$_SESSION['user_id']]);
 $clubInfo = $stmt->fetch(PDO::FETCH_ASSOC);
 
+// Statistiques des participations aux concours
+$stmt = $db->prepare("
+    SELECT 
+        COUNT(DISTINCT pc.numConcours) as total_concours,
+        SUM(CASE WHEN c.etat = 'en cours' THEN 1 ELSE 0 END) as concours_actifs,
+        (SELECT COUNT(DISTINCT d.numDessin)
+         FROM Dessin d
+         JOIN Competiteur comp ON d.numCompetiteur = comp.numCompetiteur
+         JOIN Utilisateur u ON comp.numCompetiteur = u.numUtilisateur
+         WHERE u.numClub = ?) as total_dessins_soumis
+    FROM ParticipeClub pc
+    JOIN Concours c ON pc.numConcours = c.numConcours
+    WHERE pc.numClub = ?
+");
+$stmt->execute([$clubInfo['numClub'], $clubInfo['numClub']]);
+$statsParticipation = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Performance moyenne du club
+$stmt = $db->prepare("
+    SELECT 
+        AVG(e.note) as moyenne_club,
+        COUNT(DISTINCT d.numDessin) as total_dessins_evalues
+    FROM Dessin d
+    JOIN Evaluation e ON d.numDessin = e.numDessin
+    JOIN Competiteur comp ON d.numCompetiteur = comp.numCompetiteur
+    JOIN Utilisateur u ON comp.numCompetiteur = u.numUtilisateur
+    WHERE u.numClub = ?
+");
+$stmt->execute([$clubInfo['numClub']]);
+$statsPerformance = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Top 5 des meilleurs dessins du club
+$stmt = $db->prepare("
+    SELECT 
+        d.numDessin,
+        d.leDessin,
+        u.nom,
+        u.prenom,
+        c.theme,
+        AVG(e.note) as moyenne_notes
+    FROM Dessin d
+    JOIN Evaluation e ON d.numDessin = e.numDessin
+    JOIN Competiteur comp ON d.numCompetiteur = comp.numCompetiteur
+    JOIN Utilisateur u ON comp.numCompetiteur = u.numUtilisateur
+    JOIN Concours c ON d.numConcours = c.numConcours
+    WHERE u.numClub = ?
+    GROUP BY d.numDessin
+    ORDER BY moyenne_notes DESC
+    LIMIT 5
+");
+$stmt->execute([$clubInfo['numClub']]);
+$topDessins = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Évolution mensuelle des participations
+$stmt = $db->prepare("
+    SELECT 
+        DATE_FORMAT(d.dateRemise, '%Y-%m') as mois,
+        COUNT(*) as nombre_dessins
+    FROM Dessin d
+    JOIN Competiteur comp ON d.numCompetiteur = comp.numCompetiteur
+    JOIN Utilisateur u ON comp.numCompetiteur = u.numUtilisateur
+    WHERE u.numClub = ?
+    GROUP BY DATE_FORMAT(d.dateRemise, '%Y-%m')
+    ORDER BY mois DESC
+    LIMIT 6
+");
+$stmt->execute([$clubInfo['numClub']]);
+$evolutionParticipations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
 // Concours actuels du club
 $stmt = $db->prepare("
-    SELECT c.*, COUNT(DISTINCT pc.numClub) as nb_clubs_participants
+    SELECT c.numConcours, c.theme, c.dateDebut, c.dateFin, c.etat, 
+           COUNT(DISTINCT pc.numClub) as nb_clubs_participants
     FROM Concours c
     JOIN ParticipeClub pc ON c.numConcours = pc.numConcours
     WHERE pc.numClub = ? AND c.etat = 'en cours'
-    GROUP BY c.numConcours
+    GROUP BY c.numConcours, c.theme, c.dateDebut, c.dateFin, c.etat
 ");
 $stmt->execute([$clubInfo['numClub']]);
 $concours = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -280,8 +350,6 @@ $concours = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
         <div class="nav-links">
             <a href="#dashboard">Tableau de bord</a>
-            <a href="#membres">Gestion des membres</a>
-            <a href="#concours">Concours</a>
             <a href="../logout.php">Déconnexion</a>
         </div>
     </nav>
@@ -312,61 +380,75 @@ $concours = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             <div class="stats-container">
                 <div class="stat-card">
-                    <div class="stat-value"><?= $clubInfo['total_membres'] ?></div>
-                    <div class="stat-label">Membres totaux</div>
+                    <div class="stat-value"><?= $statsParticipation['total_concours'] ?></div>
+                    <div class="stat-label">Concours participés</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value"><?= number_format($statsPerformance['moyenne_club'], 2) ?>/10</div>
+                    <div class="stat-label">Note moyenne du club</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value"><?= $statsParticipation['total_dessins_soumis'] ?></div>
+                    <div class="stat-label">Dessins soumis</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value"><?= $clubInfo['total_competiteurs'] ?></div>
-                    <div class="stat-label">Compétiteurs</div>
+                    <div class="stat-label">Compétiteurs actifs</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value"><?= $clubInfo['total_evaluateurs'] ?></div>
-                    <div class="stat-label">Évaluateurs</div>
+                    <div class="stat-value"><?= $clubInfo['total_membres'] ?></div>
+                    <div class="stat-label">Nombre total de membres</div>
                 </div>
             </div>
 
             <div class="dashboard-cards">
                 <div class="chart-container">
-                    <canvas id="membersChart"></canvas>
+                    <canvas id="participationsChart"></canvas>
                 </div>
 
-                <div class="concours-list">
-                    <h3>Concours en cours</h3>
-                    <?php foreach ($concours as $c): ?>
-                        <div class="concours-item">
-                            <div>
-                                <h4><?= htmlspecialchars($c['nomConcours']) ?></h4>
-                                <p>Clubs participants: <?= $c['nb_clubs_participants'] ?></p>
-                            </div>
-                            <div>
-                                <button onclick="viewConcours(<?= $c['numConcours'] ?>)" class="btn-view">
-                                    Voir détails
-                                </button>
-                            </div>
+                <div class="top-dessins">
+                    <h3>Top 5 des dessins</h3>
+                    <?php foreach ($topDessins as $dessin): ?>
+                        <div class="dessin-item">
+                            <h4><?= htmlspecialchars($dessin['leDessin']) ?></h4>
+                            <p>Par: <?= htmlspecialchars($dessin['prenom'] . ' ' . $dessin['nom']) ?></p>
+                            <p>Note: <?= number_format($dessin['moyenne_notes'], 2) ?>/10</p>
                         </div>
                     <?php endforeach; ?>
                 </div>
+            </div>
+
+            <div class="concours-list">
+                <h3>Concours en cours</h3>
+                <?php foreach ($concours as $c): ?>
+                    <div class="concours-item">
+                        <div>
+                            <h4><?= htmlspecialchars($c['theme']) ?></h4>
+                            <p>Date début: <?= date('d/m/Y', strtotime($c['dateDebut'])) ?></p>
+                            <p>Date fin: <?= date('d/m/Y', strtotime($c['dateFin'])) ?></p>
+                        </div>
+                        <div>
+                            <button onclick="viewConcours(<?= $c['numConcours'] ?>)" class="btn-view">
+                                Voir détails
+                            </button>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
             </div>
         </div>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // Création du graphique
-        const ctx = document.getElementById('membersChart').getContext('2d');
-        new Chart(ctx, {
+        // Graphique d'évolution des participations
+        const participationsCtx = document.getElementById('participationsChart').getContext('2d');
+        new Chart(participationsCtx, {
             type: 'line',
             data: {
-                labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin'],
+                labels: <?= json_encode(array_column(array_reverse($evolutionParticipations), 'mois')) ?>,
                 datasets: [{
-                    label: 'Évolution des membres',
-                    data: [
-                        <?= $clubInfo['total_membres'] - 5 ?>, 
-                        <?= $clubInfo['total_membres'] - 3 ?>, 
-                        <?= $clubInfo['total_membres'] - 2 ?>, 
-                        <?= $clubInfo['total_membres'] - 1 ?>, 
-                        <?= $clubInfo['total_membres'] ?>
-                    ],
+                    label: 'Nombre de dessins soumis',
+                    data: <?= json_encode(array_column(array_reverse($evolutionParticipations), 'nombre_dessins')) ?>,
                     borderColor: '#004e92',
                     tension: 0.4
                 }]
@@ -379,7 +461,7 @@ $concours = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     },
                     title: {
                         display: true,
-                        text: 'Évolution du nombre de membres'
+                        text: 'Évolution des participations mensuelles'
                     }
                 }
             }
